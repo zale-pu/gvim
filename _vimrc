@@ -48,10 +48,18 @@ let g:mapleader = ","
 " git clone https://github.com/gmarik/vundle.git ~/.vim/bundle/vundle
 if MySys() == "win32"
     set rtp+=$VIM/vimfiles/bundle/vundle/
+    if !exists('$VIM/vimfiles/bundle/vundle')
+        silent exe "!git clone https://github.com/gmarik/vundle.git $VIM/vimfiles/bundle/vundle"
+    endif
+    call vundle#rc('$VIM/vimfiles/bundle/')
 else
     set rtp+=~/.Vim/bundle/vundle
+    if !exists('~/.Vim/bundle/vundle')
+        silent exe "git clone https://github.com/gmarik/vundle.git ~/.Vim/bundle/vundle"
+    endif
+    call vundle#rc('~/.Vim/bundle/vundle')
 endif
-call vundle#rc('$VIM/vimfiles/bundle/')
+
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 if exists("&autoread")
     set autoread        " 设置当文件被改动时自动载入
@@ -175,15 +183,15 @@ endif
 " => Moving around and tab
 """""""""""""""""""""""""""""""
 "Smart way to move btw. window
-nnoremap <C-j> <C-W>j
-nnoremap <C-k> <C-W>k
-nnoremap <C-h> <C-W>h
-nnoremap <C-l> <C-W>l
+nnoremap <silent> <C-j> :wincmd j<cr>
+nnoremap <silent> <C-k> <C-W>k
+nnoremap <silent> <C-h> <C-W>h
+nnoremap <silent> <C-l> <C-W>l
 
-inoremap <C-h> <Left>
-inoremap <C-j> <Down>
-inoremap <C-k> <Up>
-inoremap <C-l> <Right>
+inoremap <silent> <C-h> <Left>
+inoremap <silent> <C-j> <Down>
+inoremap <silent> <C-k> <Up>
+inoremap <silent> <C-l> <Right>
 
 """""""""""""""""""""""""""""""
 " => Folding
@@ -258,7 +266,9 @@ let g:EasyMotion_do_shade = 1
 " Bundle 'kien/ctrlp.vim'
 Bundle 'ctrlpvim/ctrlp.vim'
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
-let g:ctrlp_map='<C-p>'
+" let g:ctrlp_map='<C-p>'
+let g:ctrlp_map=''
+nnoremap <silent> <C-p>     :silent! call Buffer_Switch('CtrlP')<cr>
 let g:ctrlp_open_multiple_files='v'
 let g:ctrlp_root_markers = ['tags']
 let g:ctrlp_custom_ignore = {
@@ -302,7 +312,8 @@ endif
 Bundle 'vim-scripts/a.vim'
 " => a.vim          " 头/源文件快速切换     " 不需要配置 
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
-let g:alternateSearchPath='sfr:../source,sfr:../src,sfr:../include,sfr:../inc,sfr:../../include'
+" let g:alternateSearchPath='sfr:../source,sfr:../src,sfr:../include,sfr:../inc,sfr:../../include'
+let g:alternateSearchPath='sfr:../*,sfr:../../*'
 
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 Bundle 'vim-scripts/YankRing.vim'
@@ -316,13 +327,58 @@ let g:yankring_replace_n_pkey = ''
 Bundle 'qpkorr/vim-bufkill'
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""  
 set switchbuf=usetab
-nnoremap <silent> <C-A-w>       :bd!<cr>
-nnoremap <silent> <A-w>         :BD!<cr>
-nnoremap <silent> <C-Tab>       :bn<cr>
-nnoremap <silent> <C-S-Tab>     :bp<cr>
-nnoremap <silent> <leader>bl    :buffers<cr>
-nnoremap <silent> <leader>bn    :bn<cr>
-nnoremap <silent> <leader>bp    :bp<cr>
+function WinCount_WithListedBuf()
+    let cnt = 0
+    for winnr in range(1, winnr('$'))
+        if getbufvar(winbufnr(winnr), '&buflisted') == 1
+            let cnt = cnt + 1
+        endif
+    endfor
+    return cnt
+endfunction
+
+function WinNxt_WithListedBuf()
+    for winnr in range(winnr(), winnr('$'))
+        if getbufvar(winbufnr(winnr), '&buflisted') == 1
+            return winnr
+        endif
+    endfor
+    for winnr in range(winnr() - 1, 0, -1)
+        if getbufvar(winbufnr(winnr), '&buflisted') == 1
+            return winnr
+        endif
+    endfor
+    return 0
+endfunction
+
+function Buffer_Delete(cmdType)
+    let winnr = winnr()
+    let bufnr = winbufnr(winnr)
+    if &l:buflisted == 1 && len(getbufinfo({'buflisted':1})) > 1
+        if &l:buftype != ''
+            exe setbufvar(bufnr, '&buflisted', 0)
+        endif
+        if len(win_findbuf(bufnr)) > 1 || WinCount_WithListedBuf() > 1
+            q
+        else
+            exe a:cmdType
+        endif
+    endif
+endfunction
+
+function Buffer_Switch(cmd)
+    let winnr = winnr()
+    if WinNxt_WithListedBuf() > 0
+        exe WinNxt_WithListedBuf() "wincmd w" 
+        exe a:cmd
+    elseif winnr('$') == 1
+        exe a:cmd
+    endif
+endfunction
+
+nnoremap <silent> <A-w>         :silent! call Buffer_Delete("BD!")<cr>
+nnoremap <silent> <C-Tab>       :silent! call Buffer_Switch("bn")<cr>
+nnoremap <silent> <C-S-Tab>     :silent! call Buffer_Switch("bp")<cr>
 
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 Bundle 'bling/vim-airline'
@@ -377,26 +433,9 @@ Bundle 'majutsushi/tagbar'
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""  
 " let g:tagbar_ctags_bin = 'D:\Vim\vim80\ctags.exe'
 set tags+=./tags,./*/tags  " use currentdir up dir recuit sub dir tag
+let g:tagbar_sort = 0
 let g:tagbar_show_linenumbers=2
 nmap <C-F4> :TagbarToggle<cr>
-
-" let g:ycm_collect_identifiers_from_tags_files = 1  
-" "开启语义补全  
-" let g:ycm_seed_identifiers_with_syntax = 1  
-" "在接受补全后不分裂出一个窗口显示接受的项  
-" set completeopt-=preview  
-" "不显示开启vim时检查ycm_extra_conf文件的信息  
-" let g:ycm_confirm_extra_conf=0  
-" "每次重新生成匹配项，禁止缓存匹配项  
-" let g:ycm_cache_omnifunc=0  
-" "在注释中也可以补全  
-" let g:ycm_complete_in_comments=1  
-" "输入第一个字符就开始补全  
-" let g:ycm_min_num_of_chars_for_completion=1  
-" "不查询ultisnips提供的代码模板补全，如果需要，设置成1即可  
-" let g:ycm_use_ultisnips_completer=0  
-" let g:ycm_key_list_select_completion = ['<C-N>', '<Down>']
-" let g:ycm_key_list_previous_completion = ['<C-P>', '<Up>']
 
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" 
 Bundle 'tomtom/quickfixsigns_vim'
@@ -410,43 +449,46 @@ Bundle 'tomtom/quickfixsigns_vim'
 "   :cnew       到后一个较新的错误列表 ( :help :cnew )
 
 function ToggleQuickfix()           " ToggleQuickfix window
-    " remember where we are 
-    let winnr = winnr() 
-    " find qf window, if any 
-    let qfw = 0 
-    windo if &l:buftype == "quickfix" | 
-                \    let qfw = winnr() | endif 
-    if qfw 
-        " close qf window 
-        cclose 
-    else 
-        " open qf window as last window, fullwidth 
-        bot copen 
-    endif 
-    " go back to where we started from 
-    if (winnr >= qfw) && (winnr > 1) 
-        let winnr = winnr - 1 
-    endif 
-    exe winnr "wincmd w" 
+    let qtwinnr = 0
+    let NerdExists = v:false
+    let TagbarExists = v:false
+    for nr in range(1, winnr('$'))
+        if getbufvar(winbufnr(nr), '&buftype') == "quickfix"
+            let qtwinnr = nr
+        endif
+        if getbufvar(winbufnr(nr), '&buftype') == "nofile" && bufname(winbufnr(nr)) =~ "NERD_tree_*"
+            let NerdExists = v:true
+        endif
+        if getbufvar(winbufnr(nr), '&buftype') == "nofile" && bufname(winbufnr(nr)) =~ "__Tagbar__*"
+            let TagbarExists = v:true
+        endif
+    endfor
+
+    if qtwinnr > 0
+        cclose
+    elseif WinNxt_WithListedBuf() > 0
+        let winnr = winnr()
+        if getbufvar(winbufnr(winnr('$')), '&buftype') == "nofile" && bufname(winbufnr(winnr('$'))) =~ "__Tagbar__*"
+            let winnr = winnr + 1
+        endif
+
+        bot copen 8
+        exe setbufvar(winbufnr(winnr()), '&buflisted', 0)
+        if NerdExists
+            NERDTreeClose
+            NERDTree
+        endif
+        if TagbarExists
+            TagbarClose
+            TagbarOpen
+        endif
+        exe winnr "wincmd w" 
+    endif
 endfunction 
-command -nargs=0 -bar FF call ToggleQuickfix() 
 
-function ShowError()
-    execute ":Errors"
-endfunction
-command -nargs=0 -bar EE call ShowError() 
-
-function ToggleQF()           " ToggleQuickfix window
-    if &l:buftype == "quickfix"
-        cclose 
-    else 
-        below copen 8
-    endif 
-endfunction 
-
-nnoremap <C-F2> :call ToggleQF()<cr>
-nnoremap <F3> :cprev<CR>
-nnoremap <F4> :cnext<CR>
+nnoremap <silent> <C-F2>    :silent! call ToggleQuickfix()<cr>
+nnoremap <silent> <F3>      :silent! cprev<CR>
+nnoremap <silent> <F4>      :silent! cnext<CR>
 
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 Bundle 'steffanc/cscopemaps.vim'
@@ -460,37 +502,37 @@ endif
 
 function Do_CsTag()
     if( MySys() != "win32" )
-        silent! execute "!rm -f tags"
-        silent! execute "!ctags -R --fields=+ialS --extra=+q --c-kinds=+p --c++-kinds=+p"
+        silent! exe "!rm -f tags"
+        silent! exe "!ctags -R --fields=+ialS --extra=+q --c-kinds=+p --c++-kinds=+p"
         if(executable('cscope') && has("cscope") )
             if filereadable("cscope.out")
-                silent! execute "cs kill cscope.out"
+                silent! exe "cs kill cscope.out"
             endif
-            silent! execute "!rm -f cscope.out ncscope.out cscope.files"
-            silent! execute "!find . -name '*.h' -o -name '*.c' -o -name '*.cpp'  -o -name '*.s' > cscope.files"
-            silent! execute "!cscope -Rbq"
+            silent! exe "!rm -f cscope.out ncscope.out cscope.files"
+            silent! exe "!find . -name '*.h' -o -name '*.c' -o -name '*.cpp'  -o -name '*.s' > cscope.files"
+            silent! exe "!cscope -Rbq"
         endif
     else
-        silent! execute "!del /f/q tags"
-        silent! execute "!ctags -R --fields=+ialS --extra=+q --c-kinds=+p --c++-kinds=+p"
+        silent! exe "!del /f/q tags"
+        silent! exe "!ctags -R --fields=+ialS --extra=+q --c-kinds=+p --c++-kinds=+p"
         if(executable('cscope') && has("cscope") )
             if filereadable("cscope.out")
-                silent! execute "cs kill cscope.out"
+                silent! exe "cs kill cscope.out"
             endif
-            silent! execute "!del /f/q cscope.out ncscope.out cscope.files"
-            silent! execute "!dir /s/b *.c,*.cpp,*.h,*.s > cscope.files"
-            silent! execute "!cscope -Rbq"
+            silent! exe "!del /f/q cscope.out ncscope.out cscope.files"
+            silent! exe "!dir /s/b *.c,*.cpp,*.h,*.s > cscope.files"
+            silent! exe "!cscope -Rbq"
         endif
     endif
 
     if filereadable("cscope.out")
-        silent! execute "cs add cscope.out"
+        silent! exe "cs add cscope.out"
     endif
 
     silent! call Taghl_generate()
 endf
 
-nmap <C-F10> :call Do_CsTag()<cr>
+nmap <C-F10> :silent! call Do_CsTag()<cr>
 
 " """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""" 
 Bundle 'vim-scripts/OmniCppComplete'
@@ -522,28 +564,6 @@ let NERDCompactSexyComs=1    " 多行注释时样子更好看
 Bundle 'vim-scripts/DoxygenToolkit.vim'
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 let g:DoxygenToolkit_authorName="QiangPu"
-
-""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
-Bundle 'vim-scripts/SrcExpl'
-" => SrcExpl        " 让VIM拥有source insight 一样的预览窗口  
-""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
-nmap <C-F5> :SrcExplToggle<CR>
-let g:SrcExpl_winHeight = 8
-let g:SrcExpl_refreshTime = 100
-let g:SrcExpl_jumpKey = "<ENTER>"
-let g:SrcExpl_gobackKey = "<SPACE>"
-let g:SrcExpl_searchLocalDef = 1 
-let g:SrcExpl_isUpdateTags = 0 
-let g:SrcExpl_updateTagsCmd = "ctags --sort=foldcase -R ." 
-let g:SrcExpl_updateTagsKey = "<C-F11>" 
-let g:SrcExpl_prevDefKey = "<C-3>" 
-let g:SrcExpl_nextDefKey = "<C-4>"
-
-let g:SrcExpl_pluginList = [ 
-        \ "__Tag_List__", 
-        \ "_NERD_tree_", 
-        \ "Source_Explorer" 
-    \ ] 
 
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 Bundle 'tracyone/mark.vim'
@@ -579,15 +599,10 @@ let g:C_Ctrl_j   = 'off'
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 Bundle 'cpp.vim'
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
-" """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
-" Bundle 'octol/vim-cpp-enhanced-highlight'
-" """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
-" let g:cpp_class_scope_highlight = 1
-" let g:cpp_experimental_simple_template_highlight = 1
-" let g:cpp_experimental_template_highlight = 1
-" let g:cpp_concepts_highlight = 1
-
+"
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 Bundle 'plasticboy/vim-markdown'
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
 " """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 " " => dict               " 语法词典
@@ -602,9 +617,9 @@ Bundle 'plasticboy/vim-markdown'
 function! Taghl_generate()
     if filereadable("tags")
         if( MySys() != "win32" )
-            silent! execute "!rm -f taghl"
+            silent! exe "!rm -f taghl"
         else
-            silent! execute "!del /f/q taghl"
+            silent! exe "!del /f/q taghl"
         endif
         sp tags
         %s/^\(\w\+::\)\(__anon\d\+::\)\+/\1/g
